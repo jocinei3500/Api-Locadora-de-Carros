@@ -3,29 +3,31 @@
 namespace App\Http\Controllers;
 
 use App\Models\Locacao;
-use App\Http\Requests\StoreLocacaoRequest;
-use App\Http\Requests\UpdateLocacaoRequest;
+use App\Repositories\LocacaoRepository;
+use Illuminate\Http\Request;
 
 class LocacaoController extends Controller
 {
+    public function __construct(Locacao $locacao)
+    {
+        $this->locacao=$locacao;
+    }
     /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
-    }
+        $locacaoRepository = new LocacaoRepository($this->locacao);
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
-    {
-        //
+        if ($request->has('filtro')) {
+            $locacaoRepository->filtro($request->filtro);
+        }
+        if ($request->has('atributos')) {
+            $locacaoRepository->selectAtributos($request->atributos);
+        }
+        return response()->json($locacaoRepository->getResultado(), 200);
     }
 
     /**
@@ -34,9 +36,11 @@ class LocacaoController extends Controller
      * @param  \App\Http\Requests\StoreLocacaoRequest  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(StoreLocacaoRequest $request)
+    public function store(Request $request)
     {
-        //
+        $request->validate($this->locacao->rules(), $this->locacao->feedback());
+        $locacao = $this->locacao->create($request->all());
+        return response()->json($locacao, 201);
     }
 
     /**
@@ -45,20 +49,13 @@ class LocacaoController extends Controller
      * @param  \App\Models\Locacao  $locacao
      * @return \Illuminate\Http\Response
      */
-    public function show(Locacao $locacao)
+    public function show($id)
     {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Locacao  $locacao
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(Locacao $locacao)
-    {
-        //
+        $locacao = $this->locacao->find($id);
+        if ($locacao === null) {
+            return response()->json(['Erro' => 'locacao não encontrado'], 404);
+        }
+        return $locacao;
     }
 
     /**
@@ -68,9 +65,36 @@ class LocacaoController extends Controller
      * @param  \App\Models\Locacao  $locacao
      * @return \Illuminate\Http\Response
      */
-    public function update(UpdateLocacaoRequest $request, Locacao $locacao)
+    public function update(Request $request, $id)
     {
-        //
+        $locacao = $this->locacao->find($id);
+
+        if ($locacao === null) {
+            return response()->json(['erro' => 'Impossível realizar a atualização. O recurso solicitado não existe'], 404);
+        }
+
+        if ($request->method() === 'PATCH') {
+
+            $regrasDinamicas = array();
+
+            //percorrendo todas as regras definidas no Model
+            foreach ($locacao->rules() as $input => $regra) {
+
+                //coletar apenas as regras aplicáveis aos parâmetros parciais da requisição PATCH
+                if (array_key_exists($input, $request->all())) {
+                    $regrasDinamicas[$input] = $regra;
+                }
+            }
+
+            $request->validate($regrasDinamicas, $locacao->feedback());
+        } else {
+            $request->validate($locacao->rules(), $locacao->feedback());
+        }
+
+        $locacao->fill($request->all());
+
+        $locacao->save();
+        return response()->json($locacao, 200);
     }
 
     /**
@@ -79,8 +103,12 @@ class LocacaoController extends Controller
      * @param  \App\Models\Locacao  $locacao
      * @return \Illuminate\Http\Response
      */
-    public function destroy(Locacao $locacao)
+    public function destroy($id)
     {
-        //
+        $locacao = $this->locacao->find($id);
+        if ($locacao === null) {
+            return response()->json(['Erro' => 'Registro não encontrado'], 404);
+        }
+        $locacao->delete();
     }
 }
